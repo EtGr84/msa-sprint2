@@ -1,1 +1,40 @@
+@startuml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
 
+LAYOUT_WITH_LEGEND()
+
+Person(user, "User", "Клиент")
+
+System_Boundary(hotelio, "Hotelio Platform") {
+
+  Container(gateway, "API Gateway", "nginx / Cloud Gateway", "Авторизация, маршрутизация, ограничение нагрузки")
+
+  Container(bookingSvc, "Booking Service", "Spring Boot", "Валидайция и оркестрация")
+  Container(userSvc, "User Service", "Spring Boot", "Управление статусами")
+  Container(hotelSvc, "Hotel Service", "Spring Boot", "Информация об отелях")
+  Container(reviewSvc, "Review Service", "Spring Boot", "Отзывы и рейтинги")
+  Container(promoSvc, "Promo Service", "Spring Boot", "Управление взаимодействием с клиентами (скидки, акции, отзывы, рейтинги)")
+
+  Container(kafka, "Message Broker", "Apache Kafka", "очередь")
+}
+
+Rel(user, gateway, "HTTPS")
+
+
+
+Rel(bookingSvc, userSvc, "gRPC isAuthorized, isVip")
+Rel(bookingSvc, hotelSvc, "gRPC isOperational, isFullyBooked")
+Rel(bookingSvc, reviewSvc, "gRPC isTrustedHotel")
+Rel(bookingSvc, promoSvc, "gRPC validate")
+Rel(promoSvc, userSvc, "gRPC isVip")
+
+Rel_L(gateway, bookingSvc, "REST /api/bookings")
+Rel(gateway, userSvc, "REST /api/users")
+Rel(gateway, hotelSvc, "REST /api/hotels")
+Rel(gateway, reviewSvc, "REST /api/reviews")
+Rel(gateway, promoSvc, "REST /api/promos")
+
+
+Rel(bookingSvc, kafka, "Publishes booking.created")
+Rel(kafka, hotelSvc, "Subscribes hotel.status.updated")
+@enduml
