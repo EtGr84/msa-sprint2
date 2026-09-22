@@ -116,7 +116,7 @@ deploy    > namespace/default not labeled
 deploy    $ helm upgrade --install "$HELM_RELEASE_V1" "$HELM_CHART" -f "$VALUES_FILE_V1" --set image.name="$IMAGE_NAME" --set image.tag="$IMAGE_TAG"
 deploy    > Release "booking-service-v1" has been upgraded. Happy Helming!
 deploy    > NAME: booking-service-v1
-deploy    > LAST DEPLOYED: Sa Sep 28 19:52:38 2026
+deploy    > LAST DEPLOYED: Sa Sep 19 19:52:38 2026
 deploy    > NAMESPACE: default
 deploy    > STATUS: deployed
 deploy    > REVISION: 7
@@ -125,7 +125,7 @@ deploy    > TEST SUITE: None
 deploy    $ helm upgrade --install "$HELM_RELEASE_V2" "$HELM_CHART" -f "$VALUES_FILE_V2" --set image.name="$IMAGE_NAME" --set image.tag="$IMAGE_TAG"
 deploy    > Release "booking-service-v2" has been upgraded. Happy Helming!
 deploy    > NAME: booking-service-v2
-deploy    > LAST DEPLOYED: Tue Apr 28 19:52:38 2026
+deploy    > LAST DEPLOYED: Sa Sep 19 19:52:38 2026
 deploy    > NAMESPACE: default
 deploy    > STATUS: deployed
 deploy    > REVISION: 7
