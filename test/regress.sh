@@ -12,6 +12,25 @@ timeout 2 bash -c "</dev/tcp/${DB_HOST}/${DB_PORT}" \
 echo "🧪 Загрузка фикстур..."
 PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" "${DB_NAME}" < init-fixtures.sql
 
+if [[ -n "${BOOKING_DB_HOST:-}" ]]; then
+  echo "🧪 Загрузка фикстур booking-service..."
+  PGPASSWORD="${BOOKING_DB_PASSWORD:-${DB_PASSWORD}}" psql \
+    -h "${BOOKING_DB_HOST}" \
+    -p "${BOOKING_DB_PORT:-5432}" \
+    -U "${BOOKING_DB_USER:-${DB_USER}}" \
+    "${BOOKING_DB_NAME:-${DB_NAME}}" < init-booking-fixtures.sql
+fi
+
+if [[ -n "${HISTORY_DB_HOST:-}" ]]; then
+  echo "🧪 Очистка исторических данных booking-history-service..."
+  PGPASSWORD="${HISTORY_DB_PASSWORD:-${DB_PASSWORD}}" psql \
+    -h "${HISTORY_DB_HOST}" \
+    -p "${HISTORY_DB_PORT:-5432}" \
+    -U "${HISTORY_DB_USER:-${DB_USER}}" \
+    "${HISTORY_DB_NAME:-${DB_NAME}}" \
+    -c "TRUNCATE TABLE booking_history, booking_stats_by_user, booking_stats_by_hotel RESTART IDENTITY;" || true
+fi
+
 echo "🧪 Выполнение HTTP-тестов..."
 
 pass() { echo "✅ $1"; }
@@ -129,4 +148,35 @@ curl -s -o /dev/null -w "%{http_code}" -X POST "${BASE}/api/bookings?userId=test
 curl -s -o /dev/null -w "%{http_code}" -X POST "${BASE}/api/bookings?userId=test-user-2&hotelId=test-hotel-2" | grep -q '500' \
   && pass "Отклонено: отель полностью забронирован" \
   || fail "Ошибка: сервер принял бронирование в полностью занятом отеле"
+
+if [[ -n "${HISTORY_DB_HOST:-}" ]]; then
+  echo ""
+  echo "Тесты исторических событий бронирования..."
+  sleep 5
+  history_count=$(PGPASSWORD="${HISTORY_DB_PASSWORD:-${DB_PASSWORD}}" psql \
+    -h "${HISTORY_DB_HOST}" \
+    -p "${HISTORY_DB_PORT:-5432}" \
+    -U "${HISTORY_DB_USER:-${DB_USER}}" \
+    "${HISTORY_DB_NAME:-${DB_NAME}}" \
+    -tAc "SELECT count(*) FROM booking_history WHERE user_id IN ('test-user-2', 'test-user-3');")
+
+  if [[ "${history_count}" -ge 2 ]]; then
+    pass "booking-history-service сохранил события BookingCreated"
+  else
+    fail "booking-history-service не сохранил ожидаемые события BookingCreated (count=${history_count})"
+  fi
+
+  user_stats_count=$(PGPASSWORD="${HISTORY_DB_PASSWORD:-${DB_PASSWORD}}" psql \
+    -h "${HISTORY_DB_HOST}" \
+    -p "${HISTORY_DB_PORT:-5432}" \
+    -U "${HISTORY_DB_USER:-${DB_USER}}" \
+    "${HISTORY_DB_NAME:-${DB_NAME}}" \
+    -tAc "SELECT count(*) FROM booking_stats_by_user WHERE user_id IN ('test-user-2', 'test-user-3');")
+
+  if [[ "${user_stats_count}" -ge 2 ]]; then
+    pass "booking-history-service обновил агрегаты по пользователям"
+  else
+    fail "booking-history-service не обновил агрегаты по пользователям (count=${user_stats_count})"
+  fi
+fi
 echo "✅ Все HTTP-тесты пройдены!"
