@@ -1,0 +1,81 @@
+@startuml
+
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Hotelio To-Be Architecture: First Strangler Fig Stage
+
+System_Ext(client, "Client / Partner API", "External Client or Partner")
+Container(frontend, "Frontend", "Web / Mobile App", "Client interface")
+
+System_Boundary(hotelio, "Hotelio Platform") {
+
+  Boundary(public_api, "Hotelio Public API Boundary") {
+    Container(monolith, "Monolith REST API", "Spring Boot", "/api/users, /api/hotels, /api/promos, /api/reviews, /api/bookings")
+    Container(adapter, "Booking Strangler Adapter", "Feature Flag", "local/external routing")
+  }
+
+  Boundary(booking_domain, "Booking Domain") {
+    Container(booking, "booking-service", "Spring Boot / gRPC", "Owns booking write model")
+    ContainerDb(bookingDb, "booking-db", "PostgreSQL", "Booking data storage")
+  }
+
+  Boundary(legacy_domain, "Legacy Domains (Monolith)") {
+    Container(user, "User Module", "Monolith", "User management")
+    Container(hotel, "Hotel Module", "Monolith", "Hotel management")
+    Container(promo, "PromoCode Module", "Monolith", "Promo management")
+    Container(review, "Review Module", "Monolith", "Review management")
+    ContainerDb(monolithDb, "monolith-db", "PostgreSQL", "users, hotels, promos, reviews, legacy bookings")
+  }
+
+  ContainerQueue(kafka, "Kafka", "Apache Kafka", "booking.created queue")
+
+  Boundary(analytics_domain, "Analytics / Read Models") {
+    Container(history, "booking-history-service", "Service", "Consumes BookingCreated")
+    ContainerDb(historyDb, "booking-history-db", "PostgreSQL", "OLAP-ready schema")
+  }
+
+  Boundary(future_api, "Future Frontend API") {
+    Container(gateway, "GraphQL Gateway / BFF", "Apollo Federation", "Federated gateway")
+    Container(bookingSubgraph, "booking-subgraph", "GraphQL Subgraph", "Booking data")
+    Container(hotelSubgraph, "hotel-subgraph", "GraphQL Subgraph", "Temporary hotel REST API")
+    Container(promoSubgraph, "promocode-subgraph", "GraphQL Subgraph", "Temporary promo REST API")
+  }
+}
+
+Rel(client, monolith, "REST")
+Rel(frontend, gateway, "GraphQL queries")
+Rel(frontend, monolith, "Existing REST", "during migration")
+
+Rel(monolith, adapter, "POST", "/api/bookings")
+Rel(adapter, booking, "CreateBooking", "gRPC")
+Rel(adapter, monolith, "fallback", "local BookingService")
+
+Rel(booking, bookingDb, "read/write", "SQL")
+Rel(booking, monolith, "REST validation calls", "users, hotels, promos, reviews")
+Rel(booking, kafka, "publish", "BookingCreated")
+
+Rel(monolith, user, "calls")
+Rel(monolith, hotel, "calls")
+Rel(monolith, promo, "calls")
+Rel(monolith, review, "calls")
+
+Rel(user, monolithDb, "read/write")
+Rel(hotel, monolithDb, "read/write")
+Rel(promo, monolithDb, "read/write")
+Rel(review, monolithDb, "read/write")
+Rel(monolith, monolithDb, "legacy reads / fallback writes")
+
+Rel(kafka, history, "consumes")
+Rel(history, historyDb, "write", "OLAP")
+
+Rel(gateway, bookingSubgraph, "routes")
+Rel(gateway, hotelSubgraph, "routes")
+Rel(gateway, promoSubgraph, "routes")
+
+Rel(bookingSubgraph, booking, "booking data", "gRPC")
+Rel(hotelSubgraph, monolith, "temporary hotel", "REST API")
+Rel(promoSubgraph, monolith, "temporary promo", "REST API")
+
+@enduml
