@@ -1,10 +1,20 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-echo "▶️ Running in-cluster DNS test..."
+echo "[INFO] Running in-cluster DNS test..."
 
-kubectl run dns-test --rm -it \
-  --image=busybox \
+response="$(kubectl run dns-test --rm \
+  -i \
+  --image=busybox:1.36 \
   --restart=Never \
-  -- wget -qO- http://booking-service/ping && echo "✅ Success" || echo "❌ Failed"
+  -- wget -qO- http://booking-service/ping)"
+
+echo "[INFO] DNS Response: ${response}"
+
+if [[ "$response" == *"pong"* ]]; then
+  echo "[PASS] DNS test succeeded"
+else
+  echo "[ERROR] Expected pong from http://booking-service/ping"
+  exit 1
+fi
